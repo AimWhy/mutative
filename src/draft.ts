@@ -29,17 +29,17 @@ import {
   finalizeSetValue,
   markFinalization,
   finalizePatches,
+  isDraft,
 } from './utils';
 import { checkReadable } from './unsafe';
 import { generatePatches } from './patch';
-
-const draftsCache = new WeakSet<object>();
+import { die, ErrorCode } from './error';
 
 const proxyHandler: ProxyHandler<ProxyDraft> = {
   get(target: ProxyDraft, key: string | number | symbol, receiver: any) {
     const copy = target.copy?.[key];
     // Improve draft reading performance by caching the draft copy.
-    if (copy && draftsCache.has(copy)) {
+    if (copy && target.finalities.draftsCache.has(copy)) {
       return copy;
     }
     if (key === PROXY_DRAFT) return target;
@@ -69,9 +69,7 @@ const proxyHandler: ProxyHandler<ProxyDraft> = {
         );
       }
       const handle = mapHandler[key as keyof typeof mapHandler] as Function;
-      if (handle) {
-        return handle.bind(target.proxy);
-      }
+      return handle.bind(target.proxy);
     }
 
     if (source instanceof Set && setHandlerKeys.includes(key as any)) {
@@ -81,9 +79,7 @@ const proxyHandler: ProxyHandler<ProxyDraft> = {
         );
       }
       const handle = setHandler[key as keyof typeof setHandler] as Function;
-      if (handle) {
-        return handle.bind(target.proxy);
-      }
+      return handle.bind(target.proxy);
     }
 
     if (!has(source, key)) {
@@ -122,13 +118,14 @@ const proxyHandler: ProxyHandler<ProxyDraft> = {
       }
       return target.copy![key];
     }
+    if (isDraft(value)) {
+      target.finalities.draftsCache.add(value);
+    }
     return value;
   },
   set(target: ProxyDraft, key: string | number | symbol, value: any) {
     if (target.type === DraftType.Set || target.type === DraftType.Map) {
-      throw new Error(
-        `Map/Set draft does not support any property assignment.`
-      );
+      die(ErrorCode.CannotAssignToMapOrSet);
     }
     let _key: number;
     if (
@@ -140,9 +137,7 @@ const proxyHandler: ProxyHandler<ProxyDraft> = {
         (key === 0 || _key === 0 || String(_key) === String(key))
       )
     ) {
-      throw new Error(
-        `Only supports setting array indices and the 'length' property.`
-      );
+      die(ErrorCode.InvalidArrayIndex);
     }
     const desc = getDescriptor(latest(target), key);
     if (desc?.set) {
@@ -198,10 +193,10 @@ const proxyHandler: ProxyHandler<ProxyDraft> = {
     return Reflect.getPrototypeOf(target.original);
   },
   setPrototypeOf() {
-    throw new Error(`Cannot call 'setPrototypeOf()' on drafts`);
+    die(ErrorCode.CannotSetPrototypeOfDraft);
   },
   defineProperty() {
-    throw new Error(`Cannot call 'defineProperty()' on drafts`);
+    die(ErrorCode.CannotDefinePropertyOnDraft);
   },
   deleteProperty(target: ProxyDraft, key: string | symbol) {
     if (target.type === DraftType.Array) {
@@ -256,7 +251,6 @@ export function createDraft<T extends object>(createDraftOptions: {
     proxyHandler
   );
   finalities.revoke.push(revoke);
-  draftsCache.add(proxy);
   proxyDraft.proxy = proxy;
   if (parentDraft) {
     const target = parentDraft;
@@ -319,10 +313,10 @@ export function finalizeDraft<T>(
   const state = hasReturnedValue
     ? returnedValue[0]
     : proxyDraft
-    ? proxyDraft.operated
-      ? proxyDraft.copy
-      : proxyDraft.original
-    : result;
+      ? proxyDraft.operated
+        ? proxyDraft.copy
+        : proxyDraft.original
+      : result;
   if (proxyDraft) revokeProxy(proxyDraft);
   if (enableAutoFreeze) {
     deepFreeze(state, state, proxyDraft?.options.updatedValues);

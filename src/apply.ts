@@ -1,4 +1,11 @@
-import { Draft, Options, Patches, DraftType, Operation } from './interface';
+import { Operation, DraftType } from './interface';
+import type {
+  Draft,
+  Patches,
+  ApplyMutableOptions,
+  ApplyOptions,
+  ApplyResult,
+} from './interface';
 import { deepClone, get, getType, isDraft, unescapePath } from './utils';
 import { create } from './create';
 
@@ -23,14 +30,11 @@ import { create } from './create';
  * expect(state).toEqual(apply(baseState, patches));
  * ```
  */
-export function apply<T extends object, F extends boolean = false>(
-  state: T,
-  patches: Patches,
-  applyOptions?: Pick<
-    Options<boolean, F>,
-    Exclude<keyof Options<boolean, F>, 'enablePatches'>
-  >
-) {
+export function apply<
+  T extends object,
+  F extends boolean = false,
+  A extends ApplyOptions<F> = ApplyOptions<F>,
+>(state: T, patches: Patches, applyOptions?: A): ApplyResult<T, F, A> {
   let i: number;
   for (i = patches.length - 1; i >= 0; i -= 1) {
     const { value, op, path } = patches[i];
@@ -45,7 +49,7 @@ export function apply<T extends object, F extends boolean = false>(
   if (i > -1) {
     patches = patches.slice(i + 1);
   }
-  const mutate = (draft: Draft<T>) => {
+  const mutate = (draft: Draft<T> | T) => {
     patches.forEach((patch) => {
       const { path: _path, op } = patch;
       const path = unescapePath(_path);
@@ -53,18 +57,33 @@ export function apply<T extends object, F extends boolean = false>(
       for (let index = 0; index < path.length - 1; index += 1) {
         const parentType = getType(base);
         let key = path[index];
-        if (typeof key !== 'string' && typeof key !== 'number') {
-          key = String(key);
-        }
+        const keyForCheck =
+          typeof key === 'symbol' ? undefined : String(key as any);
         if (
           ((parentType === DraftType.Object ||
             parentType === DraftType.Array) &&
-            (key === '__proto__' || key === 'constructor')) ||
-          (typeof base === 'function' && key === 'prototype')
+            keyForCheck !== undefined &&
+            (keyForCheck === '__proto__' || keyForCheck === 'constructor')) ||
+          (typeof base === 'function' &&
+            keyForCheck !== undefined &&
+            keyForCheck === 'prototype')
         ) {
           throw new Error(
             `Patching reserved attributes like __proto__ and constructor is not allowed.`
           );
+        }
+        if (
+          (parentType === DraftType.Object ||
+            parentType === DraftType.Array ||
+            typeof base === 'function') &&
+          typeof key !== 'string' &&
+          typeof key !== 'number' &&
+          typeof key !== 'symbol'
+        ) {
+          // keyForCheck cannot be undefined here, because:
+          // - If key is a symbol, this conditional block will not be entered
+          // - All other types will be converted to String(key)
+          key = keyForCheck!;
         }
         // use `index` in Set draft
         base = get(parentType === DraftType.Set ? Array.from(base) : base, key);
@@ -119,15 +138,28 @@ export function apply<T extends object, F extends boolean = false>(
       }
     });
   };
+  if ((applyOptions as ApplyMutableOptions)?.mutable) {
+    if (__DEV__) {
+      if (
+        Object.keys(applyOptions!).filter((key) => key !== 'mutable').length
+      ) {
+        console.warn(
+          'The "mutable" option is not allowed to be used with other options.'
+        );
+      }
+    }
+    mutate(state);
+    return undefined as ApplyResult<T, F, A>;
+  }
   if (isDraft(state)) {
     if (applyOptions !== undefined) {
       throw new Error(`Cannot apply patches with options to a draft.`);
     }
     mutate(state as Draft<T>);
-    return state;
+    return state as ApplyResult<T, F, A>;
   }
   return create<T, F>(state, mutate, {
     ...applyOptions,
     enablePatches: false,
-  });
+  }) as T as ApplyResult<T, F, A>;
 }

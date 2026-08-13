@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-template */
 /* eslint-disable no-unused-expressions */
 /* eslint-disable arrow-body-style */
@@ -14,6 +15,7 @@ import {
   markSimpleObject,
   rawReturn,
   makeCreator,
+  castMutable,
 } from '../src';
 import { PROXY_DRAFT } from '../src/constant';
 
@@ -87,7 +89,7 @@ test('check array options error', () => {
         // @ts-ignore
         draft[key] = 'new str';
       });
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 });
 
@@ -399,7 +401,7 @@ test('base root set', () => {
   const data = new Set([{ a: 1 }, { a: 2 }]);
 
   const state = create(data, (draft) => {
-    draft.values().next().value.a = 3;
+    draft.values().next().value!.a = 3;
   });
 
   expect(state).not.toBe(data);
@@ -414,7 +416,7 @@ test('base set', () => {
   };
 
   const state = create(data, (draft) => {
-    draft.set.values().next().value.a = 3;
+    draft.set.values().next().value!.a = 3;
   });
 
   expect(state).not.toBe(data);
@@ -461,7 +463,7 @@ test('delete for set', () => {
 
   const state = create(data, (draft) => {
     const draftA = draft.set.values().next().value;
-    draft.set.delete(draftA);
+    draft.set.delete(draftA!);
   });
   expect(state.set.size).toBe(0);
 });
@@ -1368,19 +1370,19 @@ test('base freeze', () => {
   expect(() => {
     // @ts-expect-error
     state.bar.a = 3;
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.list.push({ id: 3 });
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.list[0].id = 3;
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.list[1].id = 3;
-  }).toThrowError();
+  }).toThrow();
 
   const state1 = create(
     state,
@@ -1396,15 +1398,15 @@ test('base freeze', () => {
   expect(() => {
     // @ts-expect-error
     state1.list[0].id = 3;
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state1.list[1].id = 3;
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state1.bar.a = 4;
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // `state1.list` is not frozen, because `state1` has been changed in the previous step
     // just check runtime mutable
@@ -1434,15 +1436,15 @@ test('base set freeze', () => {
   expect(() => {
     // @ts-expect-error
     state.set.add(4);
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.set.delete(1);
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.set.clear();
-  }).toThrowError();
+  }).toThrow();
 });
 
 test('base map freeze', () => {
@@ -1473,15 +1475,15 @@ test('base map freeze', () => {
   expect(() => {
     // @ts-expect-error
     state.map.set(4, 4);
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.map.delete(1);
-  }).toThrowError();
+  }).toThrow();
   expect(() => {
     // @ts-expect-error
     state.map.clear();
-  }).toThrowError();
+  }).toThrow();
 });
 
 test('base map with deep object', () => {
@@ -1497,7 +1499,7 @@ test('base map with deep object', () => {
   };
 
   const state = create(data, (draft) => {
-    draft.map.values().next().value.x = 1;
+    draft.map.values().next().value!.x = 1;
     for (const [key, item] of draft.map) {
       if (item.x === 1) {
         item.c = 2;
@@ -1528,7 +1530,7 @@ test('base set deep object', () => {
   const state = create(
     data,
     (draft) => {
-      draft.set.values().next().value.x = 1;
+      draft.set.values().next().value!.x = 1;
       const [first] = draft.set.values();
       expect(draft.set.has(first)).toBeTruthy();
       for (const item of draft.set) {
@@ -2281,7 +2283,7 @@ test("Nested and chained produce usage results in error: Cannot perform 'get' on
 
   expect(() => {
     JSON.stringify(newState);
-  }).not.toThrowError();
+  }).not.toThrow();
 });
 
 test('when nesting patches and changing the level of tree structure data', () => {
@@ -2322,7 +2324,7 @@ test('when nesting patches and changing the level of tree structure data', () =>
     }
   );
 
-  expect(() => JSON.stringify(_nextState)).not.toThrowError();
+  expect(() => JSON.stringify(_nextState)).not.toThrow();
 });
 
 test('Set assignment should not have an additional key', () => {
@@ -3792,7 +3794,7 @@ test('base check mark function - Multiple mark config', () => {
           ],
         }
       );
-    }).toThrowError();
+    }).toThrow();
   });
 });
 
@@ -4082,4 +4084,293 @@ test('#59 - Failure to apply inverse patchset(Map)', () => {
   expect(reverted).toEqual(myObj);
   const reverted2 = apply(myObj, patchset);
   expect(reverted2).toEqual(newState);
+});
+
+test('apply - map with object key', () => {
+  const key = { id: 1 };
+  const base = {
+    map: new Map([[key, { value: 1 }]]),
+  };
+  const [next, patches, inverse] = create(
+    base,
+    (draft) => {
+      draft.map.get(key)!.value = 2;
+    },
+    { enablePatches: true }
+  );
+  expect(apply(base, patches)).toEqual(next);
+  expect(apply(next, inverse)).toEqual(base);
+});
+
+test('apply - symbol key on object', () => {
+  const sym = Symbol('key');
+  const base = {
+    obj: {
+      [sym]: { value: 1 },
+    },
+  };
+  const [next, patches, inverse] = create(
+    base,
+    (draft) => {
+      draft.obj[sym].value = 2;
+    },
+    { enablePatches: true }
+  );
+  expect(apply(base, patches)).toEqual(next);
+  expect(apply(next, inverse)).toEqual(base);
+});
+
+test('apply - coerces non-primitive intermediate key for object', () => {
+  const objectKey: any = { toString: () => 'customKey' };
+  const base = {
+    foo: {
+      customKey: { value: 1 },
+    },
+  };
+  const patches: any = [
+    { op: 'replace', path: ['foo', objectKey, 'value'], value: 2 },
+  ];
+  const applied = apply(base, patches);
+  expect(applied).toEqual({
+    foo: {
+      customKey: { value: 2 },
+    },
+  });
+});
+
+test('#61 - type issue: current of Draft<T> type should return T type', () => {
+  function test<T extends { x: { y: ReadonlySet<string> } }>(base: T): T {
+    const [draft, f] = create(base);
+    const mutableValue: T = castMutable(draft);
+    const currentValue: T = current(draft);
+    expect(() => {
+      // @ts-expect-error
+      const value = current({ x: { y: new Set(['a', 'b']) } } as T);
+    }).toThrowErrorMatchingInlineSnapshot(
+      `"current() is only used for Draft, parameter: [object Object]"`
+    );
+    return f();
+  }
+  expect(test({ x: { y: new Set(['a', 'b']) } })).toEqual({
+    x: { y: new Set(['a', 'b']) },
+  });
+});
+
+describe('set - new API', () => {
+  // @ts-ignore
+  if (!Set.prototype.difference) {
+    return;
+  }
+  test('set - without Set.prototype.difference', () => {
+    // @ts-ignore
+    const difference = Set.prototype.difference;
+    // @ts-ignore
+    delete Set.prototype.difference;
+    const odds = new Set([{ a: 1 }]);
+    const state = create({ odds }, (draft) => {
+      // @ts-ignore
+      draft.odds.values().next().value.a = 2;
+    });
+    // @ts-ignore
+    Set.prototype.difference = difference;
+  });
+
+  test('set - Set.prototype.intersection', () => {
+    const odds = new Set([1, 3, 5, 7, 9]);
+    const squares = new Set([1, 4, 9]);
+    const state = create(odds, (draft) => {
+      // @ts-ignore
+      expect(draft.intersection(squares)).toEqual(new Set([1, 9]));
+    });
+  });
+
+  test('set - Set.prototype.union', () => {
+    const evens = new Set([2, 4, 6, 8]);
+    const squares = new Set([1, 4, 9]);
+    const state = create(evens, (draft) => {
+      // @ts-ignore
+      expect(draft.union(squares)).toEqual(new Set([2, 4, 6, 8, 1, 9]));
+    });
+  });
+
+  test('set - Set.prototype.difference', () => {
+    const odds = new Set([1, 3, 5, 7, 9]);
+    const squares = new Set([1, 4, 9]);
+    const state = create(odds, (draft) => {
+      // @ts-ignore
+      expect(draft.difference(squares)).toEqual(new Set([3, 5, 7]));
+    });
+  });
+
+  test('set - Set.prototype.symmetricDifference', () => {
+    const evens = new Set([2, 4, 6, 8]);
+    const squares = new Set([1, 4, 9]);
+    const state = create(evens, (draft) => {
+      // @ts-ignore
+      expect(draft.symmetricDifference(squares)).toEqual(
+        new Set([2, 6, 8, 1, 9])
+      );
+    });
+  });
+
+  test('set - Set.prototype.isSubsetOf', () => {
+    {
+      const fours = new Set([4, 8, 12, 16]);
+      const evens = new Set([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+      const state = create(fours, (draft) => {
+        // @ts-ignore
+        expect(draft.isSubsetOf(evens)).toBe(true);
+      });
+    }
+    {
+      const primes = new Set([2, 3, 5, 7, 11, 13, 17, 19]);
+      const odds = new Set([3, 5, 7, 9, 11, 13, 15, 17, 19]);
+      const state = create(primes, (draft) => {
+        // @ts-ignore
+        expect(draft.isSubsetOf(odds)).toBe(false);
+      });
+    }
+  });
+
+  test('set - Set.prototype.isSupersetOf', () => {
+    {
+      const evens = new Set([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+      const fours = new Set([4, 8, 12, 16]);
+      const state = create(evens, (draft) => {
+        // @ts-ignore
+        expect(draft.isSupersetOf(fours)).toBe(true);
+      });
+    }
+    {
+      const primes = new Set([2, 3, 5, 7, 11, 13, 17, 19]);
+      const odds = new Set([3, 5, 7, 9, 11, 13, 15, 17, 19]);
+      const state = create(odds, (draft) => {
+        // @ts-ignore
+        expect(draft.isSupersetOf(primes)).toBe(false);
+      });
+    }
+  });
+
+  test('set - Set.prototype.isDisjointFrom', () => {
+    {
+      const primes = new Set([2, 3, 5, 7, 11, 13, 17, 19]);
+      const squares = new Set([1, 4, 9, 16]);
+      const state = create(primes, (draft) => {
+        // @ts-ignore
+        expect(draft.isDisjointFrom(squares)).toBe(true);
+      });
+    }
+    {
+      const composites = new Set([4, 6, 8, 9, 10, 12, 14, 15, 16, 18]);
+      const squares = new Set([1, 4, 9, 16]);
+      const state = create(composites, (draft) => {
+        // @ts-ignore
+        expect(draft.isDisjointFrom(squares)).toBe(false);
+      });
+    }
+  });
+});
+
+test('CustomSet', () => {
+  class CustomSet extends Set {
+    getIdentity() {
+      return 'CustomSet';
+    }
+  }
+
+  const state = new CustomSet();
+  const newState = create(
+    state,
+    (draft) => {
+      draft.add(1);
+      // @ts-ignore
+      expect(draft.getIdentity()).toBe('CustomSet');
+    },
+    {
+      mark: () => 'immutable',
+    }
+  );
+  expect(newState instanceof CustomSet).toBeTruthy();
+  // @ts-ignore
+  expect(newState.getIdentity()).toBe('CustomSet');
+});
+
+test('CustomMap', () => {
+  class CustomMap extends Map {
+    getIdentity() {
+      return 'CustomMap';
+    }
+  }
+
+  const state = new CustomMap();
+  const newState = create(
+    state,
+    (draft) => {
+      draft.set(1, 1);
+      // @ts-ignore
+      expect(draft.getIdentity()).toBe('CustomMap');
+    },
+    {
+      mark: () => 'immutable',
+    }
+  );
+  expect(newState instanceof CustomMap).toBeTruthy();
+  // @ts-ignore
+  expect(newState.getIdentity()).toBe('CustomMap');
+});
+
+test('Set.prototype[Symbol.iterator]', () => {
+  const state = new Set([{ a: 1 }, { b: 2 }, { c: 3 }]);
+  const newState = create(state, (draft) => {
+    expect(draft[Symbol.iterator]).toBeDefined();
+    // @ts-ignore
+    draft[Symbol.iterator]().next().value.a = 2;
+    expect(draft[Symbol.iterator]().next().value).toEqual({ a: 2 });
+  });
+  expect(newState instanceof Set).toBeTruthy();
+  expect(newState[Symbol.iterator]).toBeDefined();
+  expect(newState[Symbol.iterator]).toBe(newState[Symbol.iterator]);
+  expect([...newState]).toEqual([{ a: 2 }, { b: 2 }, { c: 3 }]);
+});
+
+test('Map.prototype[Symbol.iterator]', () => {
+  const state = new Map([
+    [1, { a: 1 }],
+    [2, { b: 2 }],
+    [3, { c: 3 }],
+  ]);
+  const newState = create(state, (draft) => {
+    expect(draft[Symbol.iterator]).toBeDefined();
+    // @ts-ignore
+    draft[Symbol.iterator]().next().value[1].a = 2;
+    expect(draft[Symbol.iterator]().next().value).toEqual([1, { a: 2 }]);
+  });
+  expect(newState instanceof Map).toBeTruthy();
+  expect(newState[Symbol.iterator]).toBeDefined();
+  expect(newState[Symbol.iterator]).toBe(newState[Symbol.iterator]);
+  expect([...newState]).toEqual([
+    [1, { a: 2 }],
+    [2, { b: 2 }],
+    [3, { c: 3 }],
+  ]);
+});
+
+test('object with writable false', () => {
+  const state = { a: { b: 1 } };
+  Object.defineProperty(state, 'b', {
+    value: { c: 1 },
+    writable: false,
+  });
+  const newState = create(
+    state,
+    (draft) => {
+      // @ts-ignore
+      draft.b.c = 2;
+    },
+    {
+      mark: () => 'immutable',
+    }
+  );
+  // @ts-ignore
+  expect(newState.b.c).toBe(2);
 });

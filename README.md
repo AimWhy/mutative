@@ -1,13 +1,12 @@
 # Mutative
 
-<a href="https://mutative.js.org/" target="_blank"><img src="https://raw.githubusercontent.com/unadlib/mutative/main/website/static/img/ mutative.png" height="120" alt="Mutative Logo" /></a>
+<a href="https://mutative.js.org/" target="_blank"><img src="https://raw.githubusercontent.com/unadlib/mutative/main/website/static/img/ mutative.png" height="120" alt="Mutative Logo" style="max-width: 100%;height: 128px;"/></a>
 
 ![Node CI](https://github.com/unadlib/mutative/workflows/Node%20CI/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/unadlib/mutative/badge.svg?branch=main)](https://coveralls.io/github/unadlib/mutative?branch=main)
 [![npm](https://img.shields.io/npm/v/mutative.svg)](https://www.npmjs.com/package/mutative)
 [![NPM Downloads](https://img.shields.io/npm/dm/mutative)](https://npmtrends.com/mutative)
 ![license](https://img.shields.io/npm/l/mutative)
-
 
 **Mutative** - A JavaScript library for efficient immutable updates, 2-6x faster than naive handcrafted reducer, and more than 10x faster than Immer.
 
@@ -110,39 +109,39 @@ Mutative is up to 6x faster than naive handcrafted reducer for updating immutabl
 
 > Mutative passed all of Immer's test cases.
 
-Measure(ops/sec) to update 50K arrays and 1K objects, bigger is better([view source](https://github.com/unadlib/mutative/blob/main/test/performance/benchmark.ts)). [Mutative v1.0.11 vs Immer v10.1.1]
+Measure(ops/sec) to update 50K arrays and 1K objects, bigger is better([view source](https://github.com/unadlib/mutative/blob/main/test/performance/benchmark.ts)). [Mutative v1.3.0 vs Immer v10.1.3]
 
 ![Benchmark](benchmark.jpg)
 
 ```
-Naive handcrafted reducer - No Freeze x 4,469 ops/sec ±0.82% (99 runs sampled)
-Mutative - No Freeze x 6,015 ops/sec ±1.17% (94 runs sampled)
-Immer - No Freeze x 5.36 ops/sec ±0.28% (18 runs sampled)
+Naive handcrafted reducer - No Freeze x 4,777 ops/sec ±1.06% (94 runs sampled)
+Mutative - No Freeze x 6,783 ops/sec ±0.71% (96 runs sampled)
+Immer - No Freeze x 5.72 ops/sec ±0.39% (19 runs sampled)
 
-Mutative - Freeze x 959 ops/sec ±0.90% (99 runs sampled)
-Immer - Freeze x 382 ops/sec ±0.53% (94 runs sampled)
+Mutative - Freeze x 1,069 ops/sec ±0.75% (97 runs sampled)
+Immer - Freeze x 392 ops/sec ±0.66% (92 runs sampled)
 
-Mutative - Patches and No Freeze x 970 ops/sec ±0.99% (96 runs sampled)
-Immer - Patches and No Freeze x 5.22 ops/sec ±0.80% (18 runs sampled)
+Mutative - Patches and No Freeze x 1,006 ops/sec ±1.73% (95 runs sampled)
+Immer - Patches and No Freeze x 5.73 ops/sec ±0.16% (19 runs sampled)
 
-Mutative - Patches and Freeze x 505 ops/sec ±0.85% (93 runs sampled)
-Immer - Patches and Freeze x 275 ops/sec ±0.49% (89 runs sampled)
+Mutative - Patches and Freeze x 548 ops/sec ±1.06% (94 runs sampled)
+Immer - Patches and Freeze x 287 ops/sec ±0.84% (93 runs sampled)
 
 The fastest method is Mutative - No Freeze
 ```
 
 Run `yarn benchmark` to measure performance.
 
-> OS: macOS 14.6.1, CPU: Apple M1 Max, Node.js: v20.11.0
+> OS: macOS 14.7, CPU: Apple M1 Max, Node.js: v22.11.0
 
 Immer relies on auto-freeze to be enabled, if auto-freeze is disabled, Immer will have a huge performance drop and Mutative will have a huge performance lead, especially with large data structures it will have a performance lead of more than 50x.
 
-So if you are using Immer, you will have to enable auto-freeze for performance. Mutative is disabled auto-freeze by default. With the default configuration of both, we can see the 16x performance gap between Mutative (`6,015 ops/sec`) and Immer (`382 ops/sec`).
+So if you are using Immer, you will have to enable auto-freeze for performance. Mutative is disabled auto-freeze by default. With the default configuration of both, we can see the 17x performance gap between Mutative (`6,783 ops/sec`) and Immer (`392 ops/sec`).
 
 Overall, Mutative has a huge performance lead over Immer in [more performance testing scenarios](https://github.com/unadlib/mutative/tree/main/test/performance). Run `yarn performance` to get all the performance results locally.
 
 <details>
-<summary><b>More Performance Testing Scenarios, Mutative is up to `2.5X-73.8X` faster than Immer:  </b></summary>
+<summary><b>More Performance Testing Scenarios, Mutative is up to `2.5X-82.9` faster than Immer:  </b></summary>
 
 ![Mutative vs Immer - All benchmark results by average multiplier](test/benchmark/results/all.jpg)
 
@@ -173,6 +172,7 @@ Overall, Mutative has a huge performance lead over Immer in [more performance te
 | Non-global config                     |       ✅ |  ❌   |
 | async draft function                  |       ✅ |  ❌   |
 | Fully compatible with JSON Patch spec |       ✅ |  ❌   |
+| new Set methods(Mutative v1.1.0+)     |       ✅ |  ❌   |
 
 Mutative has fewer bugs such as accidental draft escapes than Immer, [view details](https://github.com/unadlib/mutative/blob/main/test/immer-non-support.test.ts).
 
@@ -264,6 +264,8 @@ In this basic example, the changes to the draft are 'mutative' within the draft 
 
   > **It is recommended to enable `strict` in development mode and disable `strict` in production mode.** This will ensure safe explicit returns and also keep good performance in the production build. If the value that does not mix any current draft or is `undefined` is returned, then use [rawReturn()](#rawreturn).
 
+  > If you'd like to enable strict mode by default in a development build and turn it off for production, you can use `strict: process.env.NODE_ENV !== 'production'`.
+
 - enablePatches - `boolean | { pathAsArray?: boolean; arrayLengthAssignment?: boolean; }`, the default is false.
 
   > Enable patch, and return the patches/inversePatches.
@@ -331,6 +333,58 @@ expect(nextState).toEqual(state);
 const prevState = apply(state, inversePatches);
 expect(prevState).toEqual(baseState);
 ```
+
+#### `apply(state, patches, options)`
+
+The options parameter is optional and supports two types of configurations:
+
+1. Immutable options (similar to create options but without `enablePatches`):
+
+   - `strict` - `boolean`, forbid accessing non-draftable values in strict mode
+   - `enableAutoFreeze` - `boolean`, enable autoFreeze and return frozen state
+   - `mark` - mark function to determine if a value is mutable/immutable
+
+```ts
+const baseState = { foo: { bar: 'test' } };
+
+// This will create a new state.
+const result = apply(baseState, [
+  {
+    op: 'replace',
+    path: ['foo', 'bar'],
+    value: 'test2',
+  },
+]);
+expect(baseState).not.toEqual({ foo: { bar: 'test2' } });
+expect(result).toEqual({ foo: { bar: 'test2' } });
+```
+
+2. Mutable option(Mutative v1.2.0+):
+   - `mutable` - `boolean`, if true the state will be mutated directly instead of creating a new state
+
+Example with mutable option:
+
+```ts
+const baseState = { foo: { bar: 'test' } };
+
+// This will modify baseState directly
+apply(
+  baseState,
+  [
+    {
+      op: 'replace',
+      path: ['foo', 'bar'],
+      value: 'test2',
+    },
+  ],
+  {
+    mutable: true,
+  }
+);
+expect(baseState).toEqual({ foo: { bar: 'test2' } });
+```
+
+> ⚠️Note: The mutable option cannot be combined with other options. When using mutable option, apply() will return void instead of a new state.
 
 ### `current()`
 
@@ -531,6 +585,7 @@ expect(state.simpleObject).not.toBe(baseState.simpleObject);
 
 - `castDraft()`
 - `castImmutable()`
+- `castMutable()`
 - `Draft<T>`
 - `Immutable<T>`
 - `Patches`
@@ -554,6 +609,10 @@ Yes. Unless you have to be compatible with Internet Explorer, Mutative supports 
 - Can Mutative be integrated with Redux?
 
 Yes. Mutative supports return values for reducer, and `redux-toolkit` is considering support for [configurable `produce()`](https://github.com/reduxjs/redux-toolkit/pull/3074).
+
+- Does Mutative support shared references?
+
+Yes, Mutative supports shared references, but **each path to a shared object gets its own independent draft**. Modifications to one path do not automatically reflect in others. If you want to preserve shared references in the result, you must explicitly assign them (e.g., `draft.b = draft.a`). [Read more details](https://mutative.js.org/docs/extra-topics/shared-references).
 
 ## Migration from Immer to Mutative
 

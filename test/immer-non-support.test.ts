@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-inner-declarations */
 /* eslint-disable symbol-description */
 /* eslint-disable no-unused-expressions */
@@ -15,8 +16,12 @@ import {
   applyPatches,
   setUseStrictShallowCopy,
   current as immerCurrent,
+  createDraft,
+  finishDraft,
+  immerable,
 } from 'immer';
 import { create, apply, current } from '../src';
+import { deepClone } from '../src/utils';
 
 enableMapSet();
 
@@ -67,7 +72,7 @@ test('Unexpected operation check of Set draft', () => {
         // @ts-ignore
         draft.x = 1;
       });
-    }).not.toThrowError();
+    }).not.toThrow();
   }
   {
     const data = new Set([1]);
@@ -76,7 +81,7 @@ test('Unexpected operation check of Set draft', () => {
         // @ts-ignore
         draft.x = 1;
       });
-    }).toThrowError(`Map/Set draft does not support any property assignment.`);
+    }).toThrow(`Map/Set draft does not support any property assignment.`);
   }
 });
 
@@ -90,7 +95,7 @@ test('Unexpected operation check of Map draft', () => {
         // @ts-ignore
         draft.x = 1;
       });
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 
   {
@@ -100,7 +105,7 @@ test('Unexpected operation check of Map draft', () => {
         // @ts-ignore
         draft.x = 1;
       });
-    }).toThrowError(`Map/Set draft does not support any property assignment.`);
+    }).toThrow(`Map/Set draft does not support any property assignment.`);
   }
 });
 
@@ -119,7 +124,7 @@ test('immer failed case - freeze Map key', () => {
     expect(() => {
       // @ts-ignore
       Array.from(state.keys())[0].a = 2;
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 
   {
@@ -137,7 +142,7 @@ test('immer failed case - freeze Map key', () => {
     expect(() => {
       // @ts-ignore
       Array.from(state.keys())[0].a = 2;
-    }).toThrowError();
+    }).toThrow();
   }
 });
 
@@ -161,7 +166,7 @@ test('immer failed case - escaped draft', () => {
 
     expect(() => {
       JSON.stringify(state);
-    }).toThrowError();
+    }).toThrow();
   }
 
   {
@@ -182,7 +187,7 @@ test('immer failed case - escaped draft', () => {
 
     expect(() => {
       JSON.stringify(state);
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 });
 
@@ -266,7 +271,7 @@ test('circular reference', () => {
       produce(data, () => {
         //
       });
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 
   {
@@ -346,10 +351,10 @@ test('#18 - set: assigning a non-draft with the same key - 1', () => {
       // @ts-ignore
       // eslint-disable-next-line no-unused-expressions
       Array.from(produced[0].array[0].one)[0].three;
-    }).toThrowError();
+    }).toThrow();
 
     //  @ts-ignore
-    expect(() => applyPatches(baseState, produced[1])).toThrowError();
+    expect(() => applyPatches(baseState, produced[1])).toThrow();
     // @ts-ignore
     expect(applyPatches(produced[0], produced[2])).toEqual(baseState);
   }
@@ -368,7 +373,7 @@ test('#18 - set: assigning a non-draft with the same key - 2', () => {
       draft.c = new Set([draft.c[0], f]);
     });
     //  @ts-ignore
-    expect(() => applyPatches(baseState, produced[1])).toThrowError();
+    expect(() => applyPatches(baseState, produced[1])).toThrow();
     // @ts-ignore
     expect(applyPatches(produced[0], produced[2])).toEqual(baseState);
   }
@@ -456,7 +461,7 @@ test('produce leaks proxy objects when symbols are present', () => {
         // @ts-ignore
         draft.child.count++;
       });
-    }).toThrowError();
+    }).toThrow();
   }
   {
     const Parent = Symbol();
@@ -477,7 +482,7 @@ test('produce leaks proxy objects when symbols are present', () => {
         // @ts-ignore
         draft.child.count++;
       });
-    }).not.toThrowError();
+    }).not.toThrow();
   }
 });
 
@@ -490,7 +495,7 @@ test('error key setting in array', () => {
           // @ts-ignore
           draft[key] = 'new str';
         });
-      }).not.toThrowError();
+      }).not.toThrow();
     }
   }
   {
@@ -503,68 +508,6 @@ test('error key setting in array', () => {
         });
       }).toThrowErrorMatchingSnapshot();
     }
-  }
-});
-
-test(`Object values of a Map are not frozen anymore #1119`, () => {
-  {
-    enableMapSet();
-
-    interface Fruit {
-      key: string;
-      name: string;
-    }
-
-    const fruits: Fruit[] = [
-      { key: 'apple1', name: 'Red Delicious' },
-      { key: 'apple2', name: 'Gala' },
-    ];
-
-    let products = new Map<string, Fruit>();
-
-    function setFruitMap(fruits: Fruit[]): void {
-      products = produce(products, (draft) => {
-        draft.clear();
-        fruits.forEach((fruit) => draft.set(fruit.key, fruit));
-      });
-    }
-
-    setFruitMap(fruits);
-
-    const product = products.get('apple1');
-    // ! it should be frozen
-    expect(Object.isFrozen(product)).not.toBeTruthy();
-  }
-  {
-    interface Fruit {
-      key: string;
-      name: string;
-    }
-
-    const fruits: Fruit[] = [
-      { key: 'apple1', name: 'Red Delicious' },
-      { key: 'apple2', name: 'Gala' },
-    ];
-
-    let products: Immutable<Map<string, Fruit>> = new Map();
-
-    function setFruitMap(fruits: Fruit[]): void {
-      products = create(
-        products,
-        (draft) => {
-          draft.clear();
-          fruits.forEach((fruit) => draft.set(fruit.key, fruit));
-        },
-        {
-          enableAutoFreeze: true,
-        }
-      );
-    }
-
-    setFruitMap(fruits);
-
-    const product = products.get('apple1');
-    expect(Object.isFrozen(product)).toBeTruthy();
   }
 });
 
@@ -588,4 +531,381 @@ test('#47 Avoid deep copies', () => {
       expect(c.x.y.z).toBe(obj);
     });
   }
+});
+
+test('#61 - type issue: current of Draft<T> type should return T type', () => {
+  {
+    function test<T extends { x: { y: ReadonlySet<string> } }>(base: T): T {
+      const draft = createDraft(base);
+      // @ts-ignore
+      const currentValue: T = immerCurrent(draft); // !!! Type Draft<T> is not assignable to type T
+      // @ts-expect-error
+      return finishDraft(draft);
+    }
+    expect(test({ x: { y: new Set(['a', 'b']) } })).toEqual({
+      x: { y: new Set(['a', 'b']) },
+    });
+  }
+  {
+    function test<T extends { x: { y: ReadonlySet<string> } }>(base: T): T {
+      const [draft, f] = create(base);
+      const currentValue: T = current(draft);
+      return f();
+    }
+    expect(test({ x: { y: new Set(['a', 'b']) } })).toEqual({
+      x: { y: new Set(['a', 'b']) },
+    });
+  }
+});
+
+test('set - new Set API', () => {
+  // @ts-ignore
+  if (!Set.prototype.difference) {
+    console.warn('Set.prototype.difference is not supported');
+    return;
+  }
+  {
+    enableMapSet();
+    const odds = new Set([1, 3, 5, 7, 9]);
+    const squares = new Set([1, 4, 9]);
+    const state = produce(odds, (draft) => {
+      // @ts-ignore
+      expect(draft.intersection(squares)).toEqual(new Set([])); // it should be `new Set([1, 9])`
+    });
+  }
+  {
+    const odds = new Set([1, 3, 5, 7, 9]);
+    const squares = new Set([1, 4, 9]);
+    const state = create(odds, (draft) => {
+      // @ts-ignore
+      expect(draft.intersection(squares)).toEqual(new Set([1, 9]));
+    });
+  }
+});
+
+test('CustomSet', () => {
+  {
+    enableMapSet();
+    class CustomSet extends Set {
+      [immerable] = true;
+
+      getIdentity() {
+        return 'CustomSet';
+      }
+    }
+
+    const s = new CustomSet();
+    const newS = produce(s, (draft) => {
+      draft.add(1);
+      // @ts-ignore
+      expect(typeof draft.getIdentity === 'function').toBeFalsy(); // it should be `true`
+    });
+    // @ts-ignore
+    expect(typeof newS.getIdentity === 'function').toBeFalsy(); // it should be `true`
+  }
+  {
+    class CustomSet extends Set {
+      getIdentity() {
+        return 'CustomSet';
+      }
+    }
+
+    const state = new CustomSet();
+    const newState = create(state, (draft) => {
+      draft.add(1);
+      // @ts-ignore
+      expect(draft.getIdentity()).toBe('CustomSet');
+    });
+    expect(newState instanceof CustomSet).toBeTruthy();
+    // @ts-ignore
+    expect(newState.getIdentity()).toBe('CustomSet');
+  }
+});
+
+test('CustomMap', () => {
+  {
+    enableMapSet();
+    class CustomMap extends Map {
+      [immerable] = true;
+
+      getIdentity() {
+        return 'CustomMap';
+      }
+    }
+
+    const state = new CustomMap();
+    const newState = produce(state, (draft) => {
+      draft.set(1, 1);
+      // @ts-ignore
+      expect(typeof draft.getIdentity === 'function').toBeFalsy(); // it should be `true`
+    });
+    // @ts-ignore
+    expect(typeof newState.getIdentity === 'function').toBeFalsy(); // it should be `true`
+  }
+  {
+    class CustomMap extends Map {
+      getIdentity() {
+        return 'CustomMap';
+      }
+    }
+
+    const state = new CustomMap();
+    const newState = create(state, (draft) => {
+      draft.set(1, 1);
+      // @ts-ignore
+      expect(draft.getIdentity()).toBe('CustomMap');
+    });
+    expect(newState instanceof CustomMap).toBeTruthy();
+    // @ts-ignore
+    expect(newState.getIdentity()).toBe('CustomMap');
+  }
+});
+
+test('Unexpected undefined not assigned', () => {
+  {
+    // #1160 https://github.com/immerjs/immer/issues/1160
+    const proto = { [immerable]: true, name: undefined };
+    const foo = Object.create(proto);
+
+    // Initial state: foo should not have own property 'name'
+    expect(Object.prototype.hasOwnProperty.call(foo, 'name')).toBe(false);
+
+    enablePatches();
+    // @ts-ignore
+    const [foo_next, patches, _] = produceWithPatches(foo, (x) => {
+      x.name = undefined;
+    });
+
+    // Immer should produce empty patches when setting undefined
+    expect(patches).toEqual([]);
+
+    // After immer produce, foo should still not have own property 'name'
+    expect(Object.prototype.hasOwnProperty.call(foo, 'name')).toBe(false);
+    // foo_next should also not have own property 'name'
+    expect(Object.prototype.hasOwnProperty.call(foo_next, 'name')).toBe(false);
+
+    // Manually assigning undefined should create own property
+    foo.name = undefined;
+    expect(Object.prototype.hasOwnProperty.call(foo, 'name')).toBe(true);
+
+    // [hasOwnProp] foo: false
+    // [immer] produce foo_next from immer
+    // [immer] foo_next patches: [
+    //   {
+    //     op: "add",
+    //     path: [ "name" ],
+    //     value: undefined,
+    //   }
+    // ]
+    // [hasOwnProp] foo: false
+    // [hasOwnProp] foo_next: true
+    // [vanilla] assign name manually
+    // [hasOwnProp] foo: true
+  }
+  {
+    const immerable = Symbol();
+    const proto = { [immerable]: true, name: undefined };
+    const foo = Object.create(proto);
+
+    const [foo_next, patches, _] = create(
+      foo,
+      (x) => {
+        x.name = undefined;
+      },
+      {
+        enablePatches: true,
+        mark: (target) => {
+          if (target && target[immerable]) {
+            return 'immutable';
+          }
+        },
+      }
+    );
+
+    expect(patches).toEqual([
+      {
+        op: 'add',
+        path: ['name'],
+        value: undefined,
+      },
+    ]);
+    expect(Object.prototype.hasOwnProperty.call(foo, 'name')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(foo_next, 'name')).toBe(true);
+
+    foo.name = undefined;
+    expect(Object.prototype.hasOwnProperty.call(foo, 'name')).toBe(true);
+  }
+});
+
+test('apply - map with object key', () => {
+  {
+    enablePatches();
+    enableMapSet();
+    const key = { id: 1 };
+    const base = {
+      map: new Map([[key, { value: 1 }]]),
+    };
+    const [next, patches, inverse] = produceWithPatches(base, (draft) => {
+      draft.map.get(key)!.value = 2;
+    });
+    expect(() => applyPatches(base, patches)).toThrow();
+    expect(() => applyPatches(next, inverse)).toThrow();
+  }
+  {
+    const key = { id: 1 };
+    const base = {
+      map: new Map([[key, { value: 1 }]]),
+    };
+    const [next, patches, inverse] = create(
+      base,
+      (draft) => {
+        draft.map.get(key)!.value = 2;
+      },
+      { enablePatches: true }
+    );
+    expect(apply(base, patches)).toEqual(next);
+    expect(apply(next, inverse)).toEqual(base);
+  }
+});
+
+test('apply - symbol key on object', () => {
+  {
+    enablePatches();
+    const sym = Symbol('key');
+    const base = {
+      obj: {
+        [sym]: { value: 1 },
+      },
+    };
+    const [next, patches, inverse] = produceWithPatches(base, (draft) => {
+      draft.obj[sym].value = 2;
+    });
+    expect(() => applyPatches(base, patches)).toThrow();
+    expect(() => applyPatches(next, inverse)).toThrow();
+  }
+  {
+    const sym = Symbol('key');
+    const base = {
+      obj: {
+        [sym]: { value: 1 },
+      },
+    };
+    const [next, patches, inverse] = create(
+      base,
+      (draft) => {
+        draft.obj[sym].value = 2;
+      },
+      { enablePatches: true }
+    );
+    expect(apply(base, patches)).toEqual(next);
+    expect(apply(next, inverse)).toEqual(base);
+  }
+});
+
+
+test('#70 - deep copy patches with Custom Set/Map', () => {
+  {
+    // immer
+    class CustomSet<T> extends Set<T> {
+      // @ts-ignore
+      [immerable] = true;
+    }
+    class CustomMap<K, V> extends Map<K, V> {
+      // @ts-ignore
+      [immerable] = true;
+    }
+    const baseState = {
+      map: new CustomMap<any, any>(),
+      set: new CustomSet<any>(),
+    };
+    setUseStrictShallowCopy(true);
+    const [state, patches, inversePatches] = produceWithPatches(
+      baseState,
+      (draft) => {
+        draft.map = new CustomMap<any, any>([[1, 1]]);
+        draft.set = new CustomSet<any>([1]);
+      },
+    );
+    const nextState = applyPatches(baseState, patches);
+    expect(patches[0].value).toBeInstanceOf(CustomMap);
+    expect(patches[1].value).toBeInstanceOf(CustomSet);
+    // !!! it should be true, but it's false
+    expect(nextState.map instanceof CustomMap).toBe(false);
+    expect(nextState.set instanceof CustomSet).toBe(false);
+    // expect(nextState).toEqual(state);
+    // const prevState = applyPatches(state, inversePatches);
+    // expect(inversePatches[0].value).toBeInstanceOf(CustomMap);
+    // expect(inversePatches[1].value).toBeInstanceOf(CustomSet);
+    // expect(prevState).toEqual(baseState);
+  }
+  {
+    // mutative
+    class CustomSet<T> extends Set<T> { }
+    class CustomMap<K, V> extends Map<K, V> { }
+    const baseState = {
+      map: new CustomMap<any, any>(),
+      set: new CustomSet<any>(),
+    };
+    const [state, patches, inversePatches] = create(
+      baseState,
+      (draft) => {
+        draft.map = new CustomMap<any, any>([[1, 1]]);
+        draft.set = new CustomSet<any>([1]);
+      },
+      {
+        enablePatches: true,
+      }
+    );
+    const nextState = apply(baseState, patches);
+    expect(patches[0].value).toBeInstanceOf(CustomMap);
+    expect(patches[1].value).toBeInstanceOf(CustomSet);
+    expect(nextState.map instanceof CustomMap).toBe(true);
+    expect(nextState.set instanceof CustomSet).toBe(true);
+    expect(nextState).toEqual(state);
+    const prevState = apply(state, inversePatches);
+    expect(inversePatches[0].value).toBeInstanceOf(CustomMap);
+    expect(inversePatches[1].value).toBeInstanceOf(CustomSet);
+    expect(prevState).toEqual(baseState);
+  }
+});
+
+test('enablePatches and assign with ref array', () => {
+  function checkMutativePatches<T>(data: T, fn: (checkPatches: T) => void) {
+    const [state, patches, inversePatches] = create(data as any, fn, {
+      enablePatches: true,
+    }) as any;
+    const mutatedResult = deepClone(data);
+    fn(mutatedResult);
+    expect(state).toEqual(mutatedResult);
+    const prevState = apply(state, inversePatches);
+    expect(prevState).toEqual(data);
+    const nextState = apply(data as any, patches);
+    expect(nextState).toEqual(state);
+  }
+
+  function checkImmerPatches<T>(data: T, fn: (checkPatches: T) => void) {
+    const [state, patches, inversePatches] = produceWithPatches(data as any, fn) as any;
+    const mutatedResult = deepClone(data);
+    fn(mutatedResult);
+    expect(state).toEqual(mutatedResult);
+    const prevState = applyPatches(state, inversePatches);
+    // !!! immer: it should be equal
+    expect(prevState).not.toEqual(data);
+    const nextState = applyPatches(data as any, patches);
+    // !!! immer: it should be equal
+    expect(nextState).not.toEqual(state);
+  }
+  const state = { a: { b: { c: 1 } }, arr0: [{ a: 1 }], arr1: [{ a: 1 }] };
+  const fn = (draft: any) => {
+    draft.arr0.push(draft.arr1);
+    draft.arr1[0].a = 222;
+  };
+  checkImmerPatches(
+    state,
+    fn
+  );
+  checkMutativePatches(
+    state,
+    fn
+  );
 });

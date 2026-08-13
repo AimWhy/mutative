@@ -9,7 +9,7 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { create, apply, Patches, original } from '../src';
-import { deepClone } from '../src/utils';
+import { deepClone, set } from '../src/utils';
 
 test('classic case', () => {
   const data = {
@@ -336,12 +336,12 @@ test('set', () => {
     },
     (draft) => {
       draft.set.add({ bar: 'str' });
-      draft.set.values().next().value.bar = 'new str0';
+      draft.set.values().next().value!.bar = 'new str0';
       draft.set1.clear();
       const a = draft.set.values().next().value;
-      draft.set3.add(a);
-      a.bar = 'new str1';
-      draft.set.delete(a);
+      draft.set3.add(a!);
+      a!.bar = 'new str1';
+      draft.set.delete(a!);
     }
   );
 });
@@ -1244,7 +1244,7 @@ test('different options - apply patches', () => {
         apply(draft, [], {
           enableAutoFreeze: false,
         });
-      }).toThrowError(`Cannot apply patches with options to a draft.`);
+      }).toThrow(`Cannot apply patches with options to a draft.`);
     },
     { enableAutoFreeze: true }
   );
@@ -1253,7 +1253,7 @@ test('different options - apply patches', () => {
 test('set - patches', () => {
   expect(() => {
     apply(new Set([0]), [{ op: 'replace', path: [0], value: 1 }]);
-  }).toThrowError(`Cannot apply replace patch to set.`);
+  }).toThrow(`Cannot apply replace patch to set.`);
 });
 
 test('array - patches', () => {
@@ -1264,12 +1264,12 @@ test('array - patches', () => {
 test('unexpected - patches', () => {
   expect(() => {
     apply({ a: {} }, [{ op: 'replace', path: ['__proto__', 'a'], value: 1 }]);
-  }).toThrowError(
+  }).toThrow(
     `Patching reserved attributes like __proto__ and constructor is not allowed.`
   );
   expect(() => {
     apply({ a: {} }, [{ op: 'replace', path: ['constructor', 'a'], value: 1 }]);
-  }).toThrowError(
+  }).toThrow(
     `Patching reserved attributes like __proto__ and constructor is not allowed.`
   );
 });
@@ -1410,4 +1410,294 @@ test('modify deep object', () => {
   expect(second(base.map.get('set1'))).toBe(b);
   expect(base.map.get('set2')).toBe(set2);
   expect(first(state.map.get('set1'))).toEqual({ a: 2 });
+});
+
+test('#70 - deep copy patches with Custom Set/Map', () => {
+  class CustomSet<T> extends Set<T> {}
+  class CustomMap<K, V> extends Map<K, V> {}
+  const baseState = {
+    map: new CustomMap<any, any>(),
+    set: new CustomSet<any>(),
+  };
+  const [state, patches, inversePatches] = create(
+    baseState,
+    (draft) => {
+      draft.map = new CustomMap<any, any>([[1, 1]]);
+      draft.set = new CustomSet<any>([1]);
+    },
+    {
+      enablePatches: true,
+    }
+  );
+  const nextState = apply(baseState, patches);
+  expect(patches[0].value).toBeInstanceOf(CustomMap);
+  expect(patches[1].value).toBeInstanceOf(CustomSet);
+  expect(nextState).toEqual(state);
+  const prevState = apply(state, inversePatches);
+  expect(inversePatches[0].value).toBeInstanceOf(CustomMap);
+  expect(inversePatches[1].value).toBeInstanceOf(CustomSet);
+  expect(prevState).toEqual(baseState);
+});
+
+test('array - update', () => {
+  const obj = {
+    a: Array.from({ length: 20 }, (_, i) => ({ i })),
+    o: { b: { c: 1 } },
+  };
+  checkPatches(obj, (d) => {
+    d.a.splice(0, 1);
+  });
+
+  checkPatches(obj, (d) => {
+    // d.o.b.c++;
+    // @ts-ignore
+    d.a.splice(0, 1, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    d.a.splice(0, 1, { i: -1 }, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.shift();
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.shift();
+    d.a[0].i += 1;
+    d.a[10].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    d.a.splice(0, 1);
+    d.a[0].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    d.a.shift();
+    d.a[0].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.unshift({ i: -1 });
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    d.a.unshift({ i: -1 }, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    d.a.unshift({ i: -1 });
+    d.a[2].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.reverse();
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    d.a.reverse();
+    d.a[2].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    const a = d.a[0];
+    d.a.shift();
+    d.a[10].i += 1;
+    a.i += 1;
+    d.a.push(a);
+  });
+});
+
+test('array - update with prototype', () => {
+  const obj = {
+    a: Array.from({ length: 20 }, (_, i) => ({ i })),
+    o: { b: { c: 1 } },
+  };
+  checkPatches(obj, (d) => {
+    Array.prototype.splice.call(d.a, 0, 1);
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    Array.prototype.splice.call(d.a, 0, 1, { i: -1 }, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    Array.prototype.shift.call(d.a);
+  });
+
+  checkPatches(obj, (d) => {
+    Array.prototype.shift.call(d.a);
+    d.a[0].i += 1;
+    d.a[10].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    Array.prototype.splice.call(d.a, 0, 1);
+    d.a[0].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    Array.prototype.shift.call(d.a);
+    d.a[0].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    Array.prototype.unshift.call(d.a, { i: -1 });
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    Array.prototype.unshift(d.a, { i: -1 }, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    Array.prototype.unshift.call(d.a, { i: -1 });
+    d.a[2].i += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    Array.prototype.reverse.call(d.a);
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10].i += 1;
+    Array.prototype.reverse.call(d.a);
+    d.a[2].i += 1;
+  });
+});
+
+test('array - update primitive', () => {
+  const obj = {
+    a: Array.from({ length: 20 }, (_, i) => i),
+    o: { b: { c: 1 } },
+  };
+  checkPatches(obj, (d) => {
+    d.a.splice(0, 1);
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    d.a.splice(0, 1, { i: -1 }, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.shift();
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.shift();
+    d.a[0] += 1;
+    d.a[10] += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10] += 1;
+    d.a.splice(0, 1);
+    d.a[0] += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10] += 1;
+    d.a.shift();
+    d.a[0] += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.unshift(100);
+  });
+
+  checkPatches(obj, (d) => {
+    d.o.b.c++;
+    // @ts-ignore
+    d.a.unshift(0, { i: d.o.b });
+    // @ts-ignore
+    delete d.o.b;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10] += 1;
+    d.a.unshift(-1);
+    d.a[2] += 1;
+  });
+
+  checkPatches(obj, (d) => {
+    d.a.reverse();
+  });
+
+  checkPatches(obj, (d) => {
+    d.a[10] += 1;
+    d.a.reverse();
+    d.a[2] += 1;
+  });
+});
+
+test('base - mutate', () => {
+  const baseState = {
+    a: {
+      c: 1,
+    },
+  };
+  const [state, patches, inversePatches] = create(
+    baseState,
+    (draft) => {
+      draft.a.c = 2;
+    },
+    {
+      enablePatches: true,
+    }
+  );
+  expect(state).toEqual({ a: { c: 2 } });
+  expect({ patches, inversePatches }).toEqual({
+    patches: [
+      {
+        op: 'replace',
+        path: ['a', 'c'],
+        value: 2,
+      },
+    ],
+    inversePatches: [
+      {
+        op: 'replace',
+        path: ['a', 'c'],
+        value: 1,
+      },
+    ],
+  });
+  const nextState = apply(baseState, patches);
+  expect(nextState).toEqual({ a: { c: 2 } });
+  expect(baseState).toEqual({ a: { c: 1 } });
+
+  const result = apply(baseState, patches, {
+    mutable: true,
+  });
+  expect(baseState).toEqual({ a: { c: 2 } });
+  expect(result).toBeUndefined();
 });

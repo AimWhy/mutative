@@ -12,7 +12,7 @@ import { dataTypes } from './constant';
 export function draftify<
   T extends object,
   O extends PatchesOptions = false,
-  F extends boolean = false
+  F extends boolean = false,
 >(
   baseState: T,
   options: Options<O, F>
@@ -21,6 +21,7 @@ export function draftify<
     draft: [],
     revoke: [],
     handledSet: new WeakSet<any>(),
+    draftsCache: new WeakSet<object>(),
   };
   let patches: Patches | undefined;
   let inversePatches: Patches | undefined;

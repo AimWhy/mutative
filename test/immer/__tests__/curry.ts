@@ -1,9 +1,5 @@
 // @ts-nocheck
-import {
-  produce,
-  produceWithPatches,
-  enablePatches,
-} from '../src/immer';
+import { produce, produceWithPatches, enablePatches } from '../src/immer';
 
 enablePatches();
 
@@ -14,9 +10,9 @@ function runTests(name) {
     it('should check arguments', () => {
       expect(() => produce()).toThrowErrorMatchingSnapshot();
       // !!! This is different from immer
-      expect(() => produce({})).not.toThrowError();
+      expect(() => produce({})).not.toThrow();
       // !!! This is different from immer
-      expect(() => produce({}, {})).not.toThrowError();
+      expect(() => produce({}, {})).not.toThrow();
       expect(() => produce({}, () => {}, [])).toThrowErrorMatchingSnapshot();
     });
 
